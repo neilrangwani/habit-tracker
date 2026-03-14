@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Habit Tracker</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #f5f4f0;
+      --card:      #ffffff;
+      --green:     #22c55e;
+      --green-lt:  #dcfce7;
+      --green-dk:  #16a34a;
+      --green-md:  #86efac;
+      --violet:    #8b5cf6;
+      --violet-lt: #ede9fe;
+      --amber:     #f59e0b;
+      --amber-lt:  #fef3c7;
+      --red:       #ef4444;
+      --text:      #111827;
+      --muted:     #6b7280;
+      --border:    #e5e7eb;
+      --shadow:    0 1px 3px rgba(0,0,0,.06), 0 4px 16px rgba(0,0,0,.04);
+      --radius:    16px;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding-bottom: 60px;
+    }
+
+    /* ── Header ── */
+    .header {
+      background: var(--card);
+      border-bottom: 1px solid var(--border);
+      padding: 18px 36px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .header-left { display: flex; align-items: center; gap: 14px; }
+    .header-icon {
+      width: 40px; height: 40px; border-radius: 12px;
+      background: var(--green-lt);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px;
+    }
+    .header-title { font-size: 20px; font-weight: 700; letter-spacing: -.3px; }
+    .header-sub   { font-size: 13px; color: var(--muted); margin-top: 1px; }
+
+    .period-tabs {
+      display: flex; gap: 4px;
+      background: var(--bg);
+      border-radius: 10px;
+      padding: 4px;
+    }
+    .period-tabs button {
+      border: none; cursor: pointer;
+      padding: 7px 16px; border-radius: 8px;
+      font-size: 13px; font-weight: 500;
+      color: var(--muted); background: transparent;
+      transition: all .15s;
+    }
+    .period-tabs button.active {
+      background: var(--card);
+      color: var(--text);
+      box-shadow: 0 1px 4px rgba(0,0,0,.1);
+    }
+
+    /* ── Page layout ── */
+    .page { max-width: 1200px; margin: 0 auto; padding: 28px 24px; }
+
+    .grid-5   { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; margin-bottom: 16px; }
+    .grid-3-2 { display: grid; grid-template-columns: 2fr 1fr;        gap: 16px; margin-bottom: 16px; }
+    .grid-2   { display: grid; grid-template-columns: 1fr 1fr;        gap: 16px; margin-bottom: 16px; }
+    .full     { margin-bottom: 16px; }
+
+    /* ── Card ── */
+    .card {
+      background: var(--card);
+      border-radius: var(--radius);
+      padding: 22px 24px;
+      box-shadow: var(--shadow);
+    }
+
+    /* ── KPI cards ── */
+    .kpi { position: relative; overflow: hidden; }
+    .kpi::before {
+      content: '';
+      position: absolute; top: 0; left: 0; right: 0; height: 3px;
+      border-radius: var(--radius) var(--radius) 0 0;
+    }
+    .kpi.green::before  { background: var(--green); }
+    .kpi.violet::before { background: var(--violet); }
+    .kpi.amber::before  { background: var(--amber); }
+    .kpi.coral::before  { background: #f97316; }
+    .kpi.red::before    { background: var(--red); }
+
+    .card-label {
+      font-size: 11px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: .6px; color: var(--muted); margin-bottom: 8px;
+    }
+    .card-value {
+      font-size: 30px; font-weight: 800; letter-spacing: -1px; line-height: 1;
+    }
+    .card-sub { font-size: 12px; color: var(--muted); margin-top: 5px; }
+
+    .badge {
+      display: inline-flex; align-items: center;
+      font-size: 12px; font-weight: 600; padding: 3px 8px; border-radius: 99px;
+      margin-top: 7px;
+    }
+    .badge.up      { background: var(--green-lt); color: var(--green-dk); }
+    .badge.down    { background: #fee2e2; color: #dc2626; }
+    .badge.neutral { background: var(--bg); color: var(--muted); }
+
+    /* ── Chart section labels ── */
+    .chart-title { font-size: 15px; font-weight: 700; margin-bottom: 3px; }
+    .chart-sub   { font-size: 12px; color: var(--muted); margin-bottom: 18px; }
+
+    /* ── Heatmap ── */
+    .heatmap-wrap   { overflow-x: auto; }
+    .heatmap-grid   { display: flex; gap: 3px; min-width: max-content; }
+    .heatmap-col    { display: flex; flex-direction: column; gap: 3px; }
+    .heatmap-cell   {
+      width: 13px; height: 13px; border-radius: 3px;
+      background: var(--border);
+      cursor: default;
+    }
+    .heatmap-cell[data-v="1"] { background: #bbf7d0; }
+    .heatmap-cell[data-v="2"] { background: #4ade80; }
+    .heatmap-cell[data-v="3"] { background: #16a34a; }
+    .heatmap-cell[data-v="4"] { background: #14532d; }
+
+    .heatmap-months {
+      display: flex; justify-content: space-between;
+      font-size: 11px; color: var(--muted); margin-top: 8px;
+      padding: 0 2px;
+    }
+    .heatmap-legend {
+      display: flex; align-items: center; gap: 4px;
+      font-size: 11px; color: var(--muted); margin-top: 10px;
+    }
+    .heatmap-legend span {
+      width: 11px; height: 11px; border-radius: 2px; display: inline-block;
+    }
+
+    /* ── Loading / empty ── */
+    #loading {
+      display: flex; align-items: center; justify-content: center;
+      height: 60vh; font-size: 15px; color: var(--muted);
+    }
+    #dashboard { display: none; }
+
+    @media (max-width: 900px) {
+      .grid-5   { grid-template-columns: repeat(2, 1fr); }
+      .grid-3-2 { grid-template-columns: 1fr; }
+      .grid-2   { grid-template-columns: 1fr; }
+      .header   { padding: 14px 18px; flex-wrap: wrap; gap: 12px; }
+      .page     { padding: 18px 14px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Header ── -->
+<header class="header">
+  <div class="header-left">
+    <div class="header-icon">💧</div>
+    <div>
+      <div class="header-title" id="habitName">—</div>
+      <div class="header-sub">Daily habit tracker</div>
+    </div>
+  </div>
+  <div class="period-tabs">
+    <button onclick="setPeriod(this,'week')">Week</button>
+    <button onclick="setPeriod(this,'month')" class="active">Month</button>
+    <button onclick="setPeriod(this,'year')">Year</button>
+    <button onclick="setPeriod(this,'all')">All Time</button>
+  </div>
+</header>
+
+<!-- ── Loading ── -->
+<div id="loading">Loading…</div>
+
+<!-- ── Dashboard ── -->
+<div id="dashboard">
+<div class="page">
+
+  <!-- KPI Cards -->
+  <div class="grid-5">
+    <div class="card kpi green" id="kpiStreak">
+      <div class="card-label">Current Streak</div>
+      <div class="card-value" style="color:var(--green)">—</div>
+      <div class="card-sub">days in a row</div>
+    </div>
+    <div class="card kpi violet" id="kpiAvg">
+      <div class="card-label">Avg / Day</div>
+      <div class="card-value">—</div>
+      <div class="badge neutral" id="kpiAvgBadge">—</div>
+    </div>
+    <div class="card kpi amber" id="kpiTotal">
+      <div class="card-label">Total</div>
+      <div class="card-value">—</div>
+      <div class="card-sub">—</div>
+    </div>
+    <div class="card kpi coral" id="kpiBest">
+      <div class="card-label">Best Day</div>
+      <div class="card-value">—</div>
+      <div class="card-sub">—</div>
+    </div>
+    <div class="card kpi red" id="kpiLongest">
+      <div class="card-label">Longest Streak</div>
+      <div class="card-value" style="color:var(--red)">—</div>
+      <div class="card-sub">day record</div>
+    </div>
+  </div>
+
+  <!-- Heatmap -->
+  <div class="card full">
+    <div class="chart-title">Activity Heatmap</div>
+    <div class="chart-sub">Last 365 days</div>
+    <div class="heatmap-wrap">
+      <div class="heatmap-grid" id="heatmap"></div>
+    </div>
+    <div class="heatmap-months" id="heatmapMonths"></div>
+    <div class="heatmap-legend">
+      Less&nbsp;
+      <span style="background:var(--border)"></span>
+      <span style="background:#bbf7d0"></span>
+      <span style="background:#4ade80"></span>
+      <span style="background:#16a34a"></span>
+      <span style="background:#14532d"></span>
+      &nbsp;More
+    </div>
+  </div>
+
+  <!-- Daily Trend + Day of Week -->
+  <div class="grid-3-2">
+    <div class="card">
+      <div class="chart-title">Daily Trend</div>
+      <div class="chart-sub" id="trendSub">Logs per day with rolling average</div>
+      <canvas id="trendChart" height="180"></canvas>
+    </div>
+    <div class="card">
+      <div class="chart-title">By Day of Week</div>
+      <div class="chart-sub">Average logs — all time</div>
+      <canvas id="dowChart" height="180"></canvas>
+    </div>
+  </div>
+
+  <!-- Hour of Day + Weekly Totals -->
+  <div class="grid-2">
+    <div class="card">
+      <div class="chart-title">By Hour of Day</div>
+      <div class="chart-sub">When you log most often — all time</div>
+      <canvas id="hourChart" height="180"></canvas>
+    </div>
+    <div class="card">
+      <div class="chart-title">Weekly Totals</div>
+      <div class="chart-sub">Last 12 weeks</div>
+      <canvas id="weeklyChart" height="180"></canvas>
+    </div>
+  </div>
+
+  <!-- Monthly Totals + Distribution -->
+  <div class="grid-2">
+    <div class="card">
+      <div class="chart-title">Monthly Totals</div>
+      <div class="chart-sub">Last 12 months</div>
+      <canvas id="monthlyChart" height="180"></canvas>
+    </div>
+    <div class="card">
+      <div class="chart-title">Daily Distribution</div>
+      <div class="chart-sub">How many days had 0, 1, 2 … logs — all time</div>
+      <canvas id="distChart" height="180"></canvas>
+    </div>
+  </div>
+
+</div><!-- /page -->
+</div><!-- /dashboard -->
+
+<script>
+// ── State ─────────────────────────────────────────────────
+let appData = null;
+let currentPeriod = 'month';
+const charts = {};
+
+// ── Palette ───────────────────────────────────────────────
+const C = {
+  green:    '#22c55e',
+  greenLt:  '#dcfce7',
+  greenDk:  '#16a34a',
+  greenMd:  '#86efac',
+  violet:   '#8b5cf6',
+  violetLt: '#ede9fe',
+  amber:    '#f59e0b',
+  amberLt:  '#fef3c7',
+  text:     '#374151',
+  muted:    '#9ca3af',
+  grid:     '#f3f4f6',
+  border:   '#e5e7eb',
+};
+
+const BASE_SCALES = {
+  x: { grid: { display: false }, ticks: { color: C.text, font: { size: 11 } } },
+  y: { grid: { color: C.grid }, ticks: { color: C.text, font: { size: 11 } }, beginAtZero: true },
+};
+
+// ── Bootstrap ─────────────────────────────────────────────
+async function init() {
+  try {
+    const res = await fetch('/analytics');
+    if (!res.ok) throw new Error(res.statusText);
+    appData = await res.json();
+
+    document.title = appData.habit_name + ' — Habit Tracker';
+    document.getElementById('habitName').textContent = appData.habit_name;
+
+    renderAll();
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('dashboard').style.display = 'block';
+  } catch (e) {
+    document.getElementById('loading').textContent = 'Failed to load data. Is the server running?';
+  }
+}
+
+function renderAll() {
+  renderKPIs();
+  renderHeatmap();
+  renderTrend();
+  renderDow();
+  renderHour();
+  renderWeekly();
+  renderMonthly();
+  renderDist();
+}
+
+function setPeriod(el, period) {
+  document.querySelectorAll('.period-tabs button').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  currentPeriod = period;
+  renderKPIs();
+  renderTrend();
+}
+
+// ── KPI Cards ─────────────────────────────────────────────
+function renderKPIs() {
+  const p = appData.periods[currentPeriod];
+  const { streaks, best_day } = appData;
+
+  // Current streak
+  document.querySelector('#kpiStreak .card-value').textContent = streaks.current;
+
+  // Avg / day
+  document.querySelector('#kpiAvg .card-value').textContent = p.avg;
+  const badge = document.getElementById('kpiAvgBadge');
+  if (p.change_pct !== null && p.change_pct !== undefined) {
+    const up = p.change_pct >= 0;
+    badge.className = 'badge ' + (up ? 'up' : 'down');
+    badge.textContent = (up ? '↑ ' : '↓ ') + Math.abs(p.change_pct) + '% vs prev';
+  } else {
+    badge.className = 'badge neutral';
+    badge.textContent = 'all time';
+  }
+
+  // Total
+  document.querySelector('#kpiTotal .card-value').textContent = p.total;
+  const periodLabels = { week: 'this week', month: 'this month', year: 'this year', all: 'all time' };
+  document.querySelector('#kpiTotal .card-sub').textContent = periodLabels[currentPeriod];
+
+  // Best day
+  document.querySelector('#kpiBest .card-value').textContent = best_day.count || '—';
+  document.querySelector('#kpiBest .card-sub').textContent = best_day.date
+    ? fmtDate(best_day.date) : '—';
+
+  // Longest streak
+  document.querySelector('#kpiLongest .card-value').textContent = streaks.longest;
+}
+
+function fmtDate(dateStr) {
+  return new Date(dateStr + 'T00:00:00').toLocaleDateString('en', {
+    month: 'short', day: 'numeric', year: 'numeric'
+  });
+}
+
+// ── Heatmap ───────────────────────────────────────────────
+function renderHeatmap() {
+  const container = document.getElementById('heatmap');
+  container.innerHTML = '';
+
+  const entries = Object.entries(appData.heatmap).sort(([a], [b]) => (a < b ? -1 : 1));
+  if (!entries.length) return;
+
+  const maxVal = Math.max(...entries.map(([, v]) => v), 1);
+
+  // Pad first column so weeks align to Sunday columns
+  const firstDow = new Date(entries[0][0] + 'T00:00:00').getDay(); // 0=Sun
+  let col = null;
+  if (firstDow > 0) {
+    col = mkCol();
+    container.appendChild(col);
+    for (let i = 0; i < firstDow; i++) {
+      const pad = document.createElement('div');
+      pad.className = 'heatmap-cell';
+      pad.style.visibility = 'hidden';
+      col.appendChild(pad);
+    }
+  }
+
+  entries.forEach(([dateStr, count]) => {
+    const dow = new Date(dateStr + 'T00:00:00').getDay();
+    if (dow === 0) {
+      col = mkCol();
+      container.appendChild(col);
+    }
+    const cell = document.createElement('div');
+    cell.className = 'heatmap-cell';
+    cell.title = `${dateStr}: ${count} log${count !== 1 ? 's' : ''}`;
+    if (count > 0) {
+      const t = count / maxVal;
+      cell.dataset.v = t > 0.75 ? '4' : t > 0.5 ? '3' : t > 0.25 ? '2' : '1';
+    }
+    col.appendChild(cell);
+  });
+
+  // Month labels
+  const monthsEl = document.getElementById('heatmapMonths');
+  monthsEl.innerHTML = '';
+  const seen = new Set();
+  const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  entries.forEach(([dateStr]) => {
+    const d = new Date(dateStr + 'T00:00:00');
+    const key = `${d.getFullYear()}-${d.getMonth()}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      const span = document.createElement('span');
+      span.textContent = MONTHS[d.getMonth()] + (d.getMonth() === 0 ? ` ${d.getFullYear()}` : '');
+      monthsEl.appendChild(span);
+    }
+  });
+}
+
+function mkCol() {
+  const d = document.createElement('div');
+  d.className = 'heatmap-col';
+  return d;
+}
+
+// ── Trend Chart ───────────────────────────────────────────
+function renderTrend() {
+  const n = currentPeriod === 'week' ? 7 : currentPeriod === 'month' ? 30 : 365;
+  const slice = appData.daily.slice(-n);
+  const win = currentPeriod === 'week' ? 3 : currentPeriod === 'month' ? 7 : 30;
+
+  const labels = slice.map(({ date: d }) => {
+    const dt = new Date(d + 'T00:00:00');
+    if (currentPeriod === 'week')
+      return dt.toLocaleDateString('en', { weekday: 'short' });
+    if (currentPeriod === 'month')
+      return dt.toLocaleDateString('en', { month: 'short', day: 'numeric' });
+    return dt.toLocaleDateString('en', { month: 'short', day: 'numeric' });
+  });
+  const counts = slice.map(d => d.count);
+  const rolling = counts.map((_, i) => {
+    const s = counts.slice(Math.max(0, i - win + 1), i + 1);
+    return +(s.reduce((a, b) => a + b, 0) / s.length).toFixed(1);
+  });
+
+  document.getElementById('trendSub').textContent =
+    `Logs per day with ${win}-day rolling average`;
+
+  upsertChart('trendChart', {
+    data: {
+      labels,
+      datasets: [
+        { type: 'bar',  data: counts,  backgroundColor: C.greenLt, borderRadius: 3, label: 'Daily' },
+        { type: 'line', data: rolling, borderColor: C.green, borderWidth: 2.5,
+          pointRadius: 0, tension: 0.4, fill: false, label: `${win}-day avg` },
+      ],
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: true, position: 'top', labels: { boxWidth: 12, font: { size: 11 }, color: C.text } },
+        tooltip: { cornerRadius: 8, padding: 10 },
+      },
+      scales: {
+        x: { ...BASE_SCALES.x, ticks: { ...BASE_SCALES.x.ticks, maxTicksLimit: currentPeriod === 'week' ? 7 : 8 } },
+        y: BASE_SCALES.y,
+      },
+    },
+  });
+}
+
+// ── Day of Week ───────────────────────────────────────────
+function renderDow() {
+  const data = appData.by_dow;
+  const max  = Math.max(...data);
+  upsertChart('dowChart', {
+    data: {
+      labels: ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'],
+      datasets: [{ type: 'bar', data, backgroundColor: data.map(v => v === max ? C.green : C.greenLt), borderRadius: 6 }],
+    },
+    options: baseOptions(),
+  });
+}
+
+// ── Hour of Day ───────────────────────────────────────────
+function renderHour() {
+  const data = appData.by_hour;
+  const max  = Math.max(...data, 1);
+  const colors = data.map(v => {
+    const t = v / max;
+    return t > 0.75 ? C.greenDk : t > 0.5 ? C.green : t > 0.25 ? C.greenMd : C.greenLt;
+  });
+  const labels = Array.from({ length: 24 }, (_, i) =>
+    i === 0 ? '12a' : i < 12 ? `${i}a` : i === 12 ? '12p' : `${i - 12}p`
+  );
+  upsertChart('hourChart', {
+    data: { labels, datasets: [{ type: 'bar', data, backgroundColor: colors, borderRadius: 3 }] },
+    options: { ...baseOptions(), scales: { x: { ...BASE_SCALES.x, ticks: { ...BASE_SCALES.x.ticks, maxTicksLimit: 8 } }, y: BASE_SCALES.y } },
+  });
+}
+
+// ── Weekly Totals ─────────────────────────────────────────
+function renderWeekly() {
+  const labels = appData.weekly.map(({ week }) =>
+    new Date(week + 'T00:00:00').toLocaleDateString('en', { month: 'short', day: 'numeric' })
+  );
+  upsertChart('weeklyChart', {
+    data: {
+      labels,
+      datasets: [{
+        type: 'bar', data: appData.weekly.map(w => w.total),
+        backgroundColor: C.violetLt, borderColor: C.violet, borderWidth: 1.5, borderRadius: 5,
+      }],
+    },
+    options: { ...baseOptions(), scales: { x: { ...BASE_SCALES.x, ticks: { ...BASE_SCALES.x.ticks, maxTicksLimit: 6 } }, y: BASE_SCALES.y } },
+  });
+}
+
+// ── Monthly Totals ────────────────────────────────────────
+function renderMonthly() {
+  const data   = appData.monthly.map(m => m.total);
+  const max    = Math.max(...data, 1);
+  const labels = appData.monthly.map(({ month }) => {
+    const [yr, mo] = month.split('-');
+    return new Date(+yr, +mo - 1, 1).toLocaleDateString('en', { month: 'short', year: '2-digit' });
+  });
+  upsertChart('monthlyChart', {
+    data: {
+      labels,
+      datasets: [{ type: 'bar', data, backgroundColor: data.map(v => v === max ? C.amber : C.amberLt), borderRadius: 6 }],
+    },
+    options: baseOptions(),
+  });
+}
+
+// ── Distribution ──────────────────────────────────────────
+function renderDist() {
+  upsertChart('distChart', {
+    data: {
+      labels: ['0','1','2','3','4','5','6','7','8','9','10','11+'],
+      datasets: [{
+        type: 'bar', data: appData.distribution,
+        backgroundColor: C.violetLt, borderColor: C.violet, borderWidth: 1.5, borderRadius: 5,
+      }],
+    },
+    options: {
+      ...baseOptions(),
+      scales: {
+        x: { ...BASE_SCALES.x, title: { display: true, text: 'Logs in a day', color: C.muted, font: { size: 11 } } },
+        y: { ...BASE_SCALES.y, title: { display: true, text: 'Days', color: C.muted, font: { size: 11 } } },
+      },
+    },
+  });
+}
+
+// ── Helpers ───────────────────────────────────────────────
+function baseOptions() {
+  return {
+    responsive: true,
+    plugins: { legend: { display: false }, tooltip: { cornerRadius: 8, padding: 10 } },
+    scales: BASE_SCALES,
+  };
+}
+
+function upsertChart(id, config) {
+  if (charts[id]) charts[id].destroy();
+  charts[id] = new Chart(document.getElementById(id), config);
+}
+
+init();
+</script>
+</body>
+</html>
