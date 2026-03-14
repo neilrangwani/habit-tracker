@@ -39,7 +39,7 @@ No ORM, no frontend framework, no managed database. Everything runs in a single 
 ## Quick start
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/habit-tracker.git
+git clone https://github.com/neilrangwani/habit-tracker.git
 cd habit-tracker
 
 pip install -r requirements.txt
