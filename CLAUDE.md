@@ -28,8 +28,8 @@ python main.py --dry-run  # seeds ~400 days of fake data, no iPhone shortcut nee
 | File | Purpose |
 |---|---|
 | `main.py` | FastAPI app — routes, startup, static file serving |
-| `database.py` | SQLite init, `log_habit()`, `get_analytics()`, `seed_fake_data()` |
-| `static/index.html` | Full analytics dashboard — heatmap, 6 charts, KPI cards, period tabs |
+| `database.py` | SQLite init, `log_habit()`, `get_analytics()`, `seed_fake_data()`, `import_csv()`, `clear_logs()` |
+| `static/index.html` | Full analytics dashboard — heatmap, 6 charts, KPI cards, period tabs, admin modal |
 | `railway.toml` | Railway deployment config — Dockerfile builder + persistent volume mount at `/data` |
 | `Dockerfile` | Container build |
 
@@ -48,10 +48,21 @@ Generate an API key: `python -c "import secrets; print(secrets.token_hex(16))"`
 | `POST` | `/log` | API key | Insert a timestamped log row |
 | `GET` | `/analytics` | None | Full analytics JSON — heatmap, streaks, periods, trends, patterns, distribution |
 | `GET` | `/data` | None | Lightweight `{date: count}` for last 365 days (backwards compat) |
+| `POST` | `/admin/import` | API key | Import CSV — columns: `date`, `count`, optional `timestamp` |
+| `POST` | `/admin/seed` | API key | Seed ~400 days of fake data |
+| `DELETE` | `/admin/reset` | API key | Delete all log rows |
 | `GET` | `/` | None | Serve dashboard |
 | `GET` | `/health` | None | Health check |
 
 Auth: `X-API-Key` header **or** `?api_key=` query param (query param used by iPhone shortcut).
+
+## Admin Panel
+The ⚙ gear icon in the dashboard header opens an admin modal. Requires the API key.
+- **Import CSV** — adds historical data without wiping existing logs
+- **Seed** — populates with fake data (replaces existing)
+- **Clear** — deletes all logs, requires typing `CONFIRM`
+
+Do NOT use the Railway shell to run database commands — this can crash the deployment.
 
 ## Analytics JSON shape (`/analytics`)
 ```json
@@ -85,20 +96,35 @@ CREATE TABLE logs (
 Logs are stored in UTC. All timezone conversion happens at read time in `get_analytics()` using `zoneinfo`.
 On Railway, the DB file lives at `/data/habit_tracker.db` (persistent volume). Locally it falls back to `habit_tracker.db`.
 
+## CSV Import format
+```
+date,count,timestamp
+2026-01-01,5,
+2026-01-02,1,2026-01-02 08:30:00
+```
+- `date`: YYYY-MM-DD (required)
+- `count`: integer number of logs for that day (required)
+- `timestamp`: YYYY-MM-DD HH:MM:SS in local time (optional — if omitted, logs are spread evenly 9am–9pm)
+- Import appends to existing data; clear first if you want a clean slate
+
 ## iPhone Shortcut Setup
 1. Open the **Shortcuts** app on iPhone
-2. Create a new shortcut → add action **"Get Contents of URL"**
+2. Tap **+** → Add Action → **Get Contents of URL**
 3. Set Method: `POST`
 4. Set URL: `https://your-app.up.railway.app/log?api_key=YOUR_KEY`
-5. Add the shortcut to your Home Screen
+5. Set Request Body to `JSON` (leave body empty)
+6. Add the shortcut to your Home Screen
 
 ## Deployment (Railway)
-1. Push repo to GitHub
-2. New project at railway.app → Deploy from GitHub repo
-3. Set env vars in Railway dashboard: `HABIT_TRACKER_API_KEY`, `HABIT_NAME`, `TZ`
-4. Railway provisions a persistent volume at `/data` (defined in `railway.toml`)
-5. Generate a public domain under Settings → Networking
-6. Paste the URL into the iPhone shortcut
+1. Push repo to GitHub (`gh repo create habit-tracker --public --source=. --remote=origin --push`)
+2. Go to railway.app → New Project → Deploy from GitHub repo → select `habit-tracker`
+3. Grant Railway access to the repo via Configure GitHub App if needed
+4. Set env vars in Railway dashboard: `HABIT_TRACKER_API_KEY`, `HABIT_NAME`, `TZ`
+5. Go to Settings → Networking → Generate Domain → enter port `8080`
+6. Paste the Railway URL into the iPhone shortcut
+
+Railway uses the `Dockerfile` to build and the `railway.toml` to configure the persistent volume at `/data`.
+Every push to `main` triggers an automatic redeploy.
 
 ## Secrets (never commit)
 | File | Contains |
