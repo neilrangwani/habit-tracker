@@ -15,6 +15,7 @@ def _conn():
 
 
 def init_db():
+    os.makedirs(os.path.dirname(os.path.abspath(DB_PATH)), exist_ok=True)
     with _conn() as conn:
         conn.execute("""
             CREATE TABLE IF NOT EXISTS logs (
