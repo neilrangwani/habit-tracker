@@ -79,8 +79,7 @@
     /* ── Page layout ── */
     .page { max-width: 1200px; margin: 0 auto; padding: 28px 24px; }
 
-    .grid-5   { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; margin-bottom: 16px; }
-    .grid-3-2 { display: grid; grid-template-columns: 2fr 1fr;        gap: 16px; margin-bottom: 16px; }
+    .grid-5   { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; margin-bottom: 16px; }
     .grid-2   { display: grid; grid-template-columns: 1fr 1fr;        gap: 16px; margin-bottom: 16px; }
     .full     { margin-bottom: 16px; }
 
@@ -161,12 +160,34 @@
     }
     #dashboard { display: none; }
 
-    @media (max-width: 900px) {
-      .grid-5   { grid-template-columns: repeat(2, 1fr); }
-      .grid-3-2 { grid-template-columns: 1fr; }
-      .grid-2   { grid-template-columns: 1fr; }
-      .header   { padding: 14px 18px; flex-wrap: wrap; gap: 12px; }
-      .page     { padding: 18px 14px; }
+    @media (max-width: 768px) {
+      /* Header stacks vertically */
+      .header {
+        padding: 14px 16px;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+      }
+      .period-tabs { width: 100%; justify-content: stretch; }
+      .period-tabs button { flex: 1; padding: 8px 4px; font-size: 12px; }
+
+      /* Page */
+      .page { padding: 16px 12px; }
+
+      /* KPI: 2 columns */
+      .grid-5 { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+      /* Last KPI card spans full width so it doesn't sit alone */
+      .grid-5 > :last-child { grid-column: span 2; }
+
+      /* Charts: single column */
+      .grid-2 { grid-template-columns: 1fr; gap: 12px; }
+
+      /* Cards: tighter padding */
+      .card { padding: 16px; }
+      .card-value { font-size: 24px; }
+
+      /* Shorter charts on mobile */
+      canvas { max-height: 200px; }
     }
   </style>
 </head>
@@ -245,7 +266,7 @@
   </div>
 
   <!-- Daily Trend + Day of Week -->
-  <div class="grid-3-2">
+  <div class="grid-2">
     <div class="card">
       <div class="chart-title">Daily Trend</div>
       <div class="chart-sub" id="trendSub">Logs per day with rolling average</div>
