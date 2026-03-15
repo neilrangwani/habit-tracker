@@ -153,14 +153,16 @@
       width: 11px; height: 11px; border-radius: 2px; display: inline-block;
     }
 
-    /* ── Admin gear button ── */
-    .admin-btn {
+    /* ── Header buttons ── */
+    .header-btn {
       border: none; background: transparent; cursor: pointer;
       color: var(--muted); font-size: 18px; padding: 6px; border-radius: 8px;
       transition: color .15s, background .15s;
-      margin-left: 8px;
+      margin-left: 4px;
     }
-    .admin-btn:hover { color: var(--text); background: var(--bg); }
+    .header-btn:hover { color: var(--text); background: var(--bg); }
+    .admin-btn { font-size: 18px; }
+    .logout-btn { font-size: 15px; }
 
     /* ── Modal ── */
     .modal-overlay {
@@ -261,7 +263,8 @@
       <button onclick="setPeriod(this,'year')">Year</button>
       <button onclick="setPeriod(this,'all')">All Time</button>
     </div>
-    <button class="admin-btn" onclick="openAdmin()" title="Admin">⚙</button>
+    <button class="header-btn admin-btn" onclick="openAdmin()" title="Admin">⚙</button>
+    <button class="header-btn logout-btn" onclick="logout()" title="Sign out">⎋</button>
   </div>
 </header>
 
@@ -272,8 +275,16 @@
       <div class="modal-title">Admin</div>
       <button class="modal-close" onclick="closeAdmin()">✕</button>
     </div>
-    <p class="modal-desc">Enter your API key to perform admin actions.</p>
-    <input type="password" id="adminKey" class="modal-input" placeholder="API key" />
+    <div class="admin-action" style="border-top:none;padding-top:0">
+      <div style="width:100%">
+        <div class="admin-action-title">iPhone Shortcut URL</div>
+        <div class="admin-action-desc" style="margin-bottom:8px">Paste this into your shortcut's URL field</div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input type="text" id="shortcutUrl" class="modal-input" style="margin:0;flex:1;font-size:12px" readonly />
+          <button class="btn btn-secondary" onclick="copyShortcut()">Copy</button>
+        </div>
+      </div>
+    </div>
     <div class="admin-action">
       <div>
         <div class="admin-action-title">Import Historical Data</div>
@@ -422,11 +433,25 @@ const BASE_SCALES = {
   y: { grid: { color: C.grid }, ticks: { color: C.text, font: { size: 11 } }, beginAtZero: true },
 };
 
+// ── Auth ───────────────────────────────────────────────────
+function getToken() { return localStorage.getItem('token'); }
+
+function authHeaders() {
+  return { 'Authorization': 'Bearer ' + getToken() };
+}
+
+function logout() {
+  localStorage.removeItem('token');
+  window.location.href = '/login';
+}
+
 // ── Admin ──────────────────────────────────────────────────
 function openAdmin() {
   document.getElementById('adminOverlay').classList.add('open');
   document.getElementById('adminMsg').textContent = '';
-  document.getElementById('adminKey').value = '';
+  // Populate shortcut URL
+  const url = `${window.location.origin}/log?token=${getToken()}`;
+  document.getElementById('shortcutUrl').value = url;
 }
 function closeAdmin() {
   document.getElementById('adminOverlay').classList.remove('open');
@@ -436,30 +461,21 @@ function showAdminMsg(msg, type) {
   el.textContent = msg;
   el.className = 'admin-msg ' + type;
 }
-async function adminSeed() {
-  const key = document.getElementById('adminKey').value.trim();
-  if (!key) { showAdminMsg('Enter your API key first.', 'error'); return; }
-  if (!confirm('Replace all existing data with ~1 year of fake data?')) return;
-  showAdminMsg('Seeding… this may take a moment.', 'info');
-  try {
-    const res = await fetch('/admin/seed?api_key=' + encodeURIComponent(key), { method: 'POST' });
-    if (res.status === 401) { showAdminMsg('Wrong API key.', 'error'); return; }
-    if (!res.ok) throw new Error();
-    showAdminMsg('Done! Reloading…', 'success');
-    setTimeout(() => { closeAdmin(); location.reload(); }, 1200);
-  } catch { showAdminMsg('Something went wrong.', 'error'); }
+function copyShortcut() {
+  const el = document.getElementById('shortcutUrl');
+  el.select();
+  document.execCommand('copy');
+  showAdminMsg('Copied to clipboard!', 'success');
 }
 async function adminImport() {
-  const key = document.getElementById('adminKey').value.trim();
-  if (!key) { showAdminMsg('Enter your API key first.', 'error'); return; }
   const file = document.getElementById('csvFile').files[0];
   if (!file) return;
   showAdminMsg('Importing…', 'info');
   const form = new FormData();
   form.append('file', file);
   try {
-    const res = await fetch('/admin/import?api_key=' + encodeURIComponent(key), { method: 'POST', body: form });
-    if (res.status === 401) { showAdminMsg('Wrong API key.', 'error'); return; }
+    const res = await fetch('/admin/import', { method: 'POST', headers: authHeaders(), body: form });
+    if (res.status === 401) { logout(); return; }
     if (res.status === 400) { const d = await res.json(); showAdminMsg(d.detail, 'error'); return; }
     if (!res.ok) throw new Error();
     const d = await res.json();
@@ -469,14 +485,12 @@ async function adminImport() {
 }
 
 async function adminReset() {
-  const key = document.getElementById('adminKey').value.trim();
-  if (!key) { showAdminMsg('Enter your API key first.', 'error'); return; }
   const confirmed = prompt('Type CONFIRM to permanently delete all data:');
   if (confirmed !== 'CONFIRM') { showAdminMsg('Cancelled.', 'info'); return; }
   showAdminMsg('Clearing…', 'info');
   try {
-    const res = await fetch('/admin/reset?api_key=' + encodeURIComponent(key), { method: 'DELETE' });
-    if (res.status === 401) { showAdminMsg('Wrong API key.', 'error'); return; }
+    const res = await fetch('/admin/reset', { method: 'DELETE', headers: authHeaders() });
+    if (res.status === 401) { logout(); return; }
     if (!res.ok) throw new Error();
     showAdminMsg('Done! Reloading…', 'success');
     setTimeout(() => { closeAdmin(); location.reload(); }, 1200);
@@ -485,8 +499,10 @@ async function adminReset() {
 
 // ── Bootstrap ─────────────────────────────────────────────
 async function init() {
+  if (!getToken()) { window.location.href = '/login'; return; }
   try {
-    const res = await fetch('/analytics');
+    const res = await fetch('/analytics', { headers: authHeaders() });
+    if (res.status === 401) { logout(); return; }
     if (!res.ok) throw new Error(res.statusText);
     appData = await res.json();
 

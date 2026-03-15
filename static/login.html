@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sign In — Habit Tracker</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
+      background: #f5f4f0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .card {
+      background: #fff;
+      border-radius: 20px;
+      padding: 40px 36px;
+      width: 100%;
+      max-width: 380px;
+      box-shadow: 0 1px 3px rgba(0,0,0,.06), 0 8px 32px rgba(0,0,0,.06);
+      text-align: center;
+    }
+    .icon {
+      width: 56px; height: 56px; border-radius: 16px;
+      background: #dcfce7;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 26px;
+      margin: 0 auto 20px;
+    }
+    h1 { font-size: 22px; font-weight: 800; letter-spacing: -.4px; color: #111827; margin-bottom: 6px; }
+    .sub { font-size: 14px; color: #6b7280; margin-bottom: 28px; }
+    input {
+      width: 100%; padding: 12px 14px;
+      border: 1px solid #e5e7eb; border-radius: 10px;
+      font-size: 15px; color: #111827;
+      outline: none; transition: border-color .15s;
+      margin-bottom: 12px;
+      background: #fafaf9;
+    }
+    input:focus { border-color: #22c55e; background: #fff; }
+    button {
+      width: 100%; padding: 13px;
+      background: #22c55e; color: #fff;
+      border: none; border-radius: 10px;
+      font-size: 15px; font-weight: 700;
+      cursor: pointer; transition: opacity .15s;
+      margin-top: 4px;
+    }
+    button:hover { opacity: .9; }
+    button:disabled { opacity: .6; cursor: not-allowed; }
+    .error {
+      font-size: 13px; color: #dc2626;
+      margin-top: 12px; min-height: 18px;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon">💧</div>
+    <h1>Habit Tracker</h1>
+    <p class="sub">Sign in to your dashboard</p>
+    <form onsubmit="login(event)">
+      <input type="text" id="username" placeholder="Username" autocomplete="username" required />
+      <input type="password" id="password" placeholder="Password" autocomplete="current-password" required />
+      <button type="submit" id="btn">Sign in</button>
+    </form>
+    <div class="error" id="error"></div>
+  </div>
+
+  <script>
+    if (localStorage.getItem('token')) window.location.href = '/';
+
+    async function login(e) {
+      e.preventDefault();
+      const btn = document.getElementById('btn');
+      btn.disabled = true;
+      btn.textContent = 'Signing in…';
+      document.getElementById('error').textContent = '';
+      try {
+        const res = await fetch('/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            username: document.getElementById('username').value.trim(),
+            password: document.getElementById('password').value,
+          }),
+        });
+        if (res.ok) {
+          const { token } = await res.json();
+          localStorage.setItem('token', token);
+          window.location.href = '/';
+        } else {
+          document.getElementById('error').textContent = 'Invalid username or password.';
+          btn.disabled = false;
+          btn.textContent = 'Sign in';
+        }
+      } catch {
+        document.getElementById('error').textContent = 'Connection error. Try again.';
+        btn.disabled = false;
+        btn.textContent = 'Sign in';
+      }
+    }
+  </script>
+</body>
+</html>
