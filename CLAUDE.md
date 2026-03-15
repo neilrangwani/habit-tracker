@@ -1,18 +1,22 @@
 # CLAUDE.md — Habit Tracker
 
 ## What This Is
-A self-hosted personal habit tracker with an iPhone Home Screen shortcut integration.
-One tap logs a habit with a full UTC timestamp. A web dashboard shows a full year of analytics
-including a GitHub-style heatmap, trends, streaks, day-of-week patterns, hour-of-day patterns,
-and period-over-period comparisons.
+A self-hosted habit tracker with JWT-authenticated multi-user accounts and iPhone Home Screen shortcut integration.
+One tap logs a habit with a full UTC timestamp. A web dashboard shows a full year of analytics:
+GitHub-style heatmap, daily/weekly/monthly trends, streaks, day-of-week and hour-of-day patterns,
+period-over-period comparisons, and daily distribution.
 
-Designed to be cloned and self-hosted per user — no shared infrastructure, no shared auth.
+Users sign in with username + password. Each user's data is fully isolated.
+The server owner creates accounts via API — no self-registration.
 
 ## Stack
 - Python 3.10+
 - `fastapi` + `uvicorn` — HTTP server + API
+- `python-jose` — JWT token creation and verification
+- `passlib[bcrypt]` + `bcrypt==4.0.1` — password hashing (bcrypt pinned for passlib compatibility)
 - `python-dotenv` — `.env` management
-- SQLite — zero-config local database (individual timestamped rows, not pre-aggregated counts)
+- `python-multipart` — file upload support for CSV import
+- SQLite with WAL mode — zero-config local database, concurrent reads, individual timestamped rows
 - Vanilla HTML/CSS/JS + Chart.js — dashboard frontend (no framework, no build step)
 - Docker — container build
 - Railway — hosting with persistent volume for SQLite
@@ -21,48 +25,76 @@ Designed to be cloned and self-hosted per user — no shared infrastructure, no 
 ```bash
 pip install -r requirements.txt
 python main.py            # live server on http://localhost:8000
-python main.py --dry-run  # seeds ~400 days of fake data, no iPhone shortcut needed
+python main.py --dry-run  # creates demo/demo user and seeds ~400 days of fake data
 ```
 
 ## Key Files
 | File | Purpose |
 |---|---|
-| `main.py` | FastAPI app — routes, startup, static file serving |
-| `database.py` | SQLite init, `log_habit()`, `get_analytics()`, `seed_fake_data()`, `import_csv()`, `clear_logs()` |
-| `static/index.html` | Full analytics dashboard — heatmap, 6 charts, KPI cards, period tabs, admin modal |
-| `railway.toml` | Railway deployment config — Dockerfile builder + persistent volume mount at `/data` |
+| `main.py` | FastAPI app — routes, JWT auth helpers, startup |
+| `database.py` | SQLite init, all DB functions — all scoped to `user_id` |
+| `static/index.html` | Analytics dashboard — heatmap, 6 charts, KPI cards, period tabs, admin modal |
+| `static/login.html` | Login page — posts to `/auth/login`, stores JWT in localStorage |
+| `railway.toml` | Railway deployment config — Dockerfile builder + persistent volume at `/data` |
 | `Dockerfile` | Container build |
 
 ## Configuration (`.env`)
 | Variable | Purpose |
 |---|---|
-| `HABIT_TRACKER_API_KEY` | Secret token for the `/log` endpoint (put this in the iPhone shortcut) |
-| `HABIT_NAME` | Display name for the habit (e.g. `Water`, `Breathing`) |
-| `TZ` | Your timezone for day/hour bucketing (e.g. `America/Los_Angeles`) |
+| `HABIT_TRACKER_API_KEY` | Master key for creating user accounts (owner only) |
+| `HABIT_NAME` | Default habit name for new users (e.g. `Water`) |
+| `TZ` | Default timezone for new users (e.g. `America/Los_Angeles`) |
+| `JWT_SECRET` | Secret for signing JWTs (defaults to `HABIT_TRACKER_API_KEY` if unset) |
 
-Generate an API key: `python -c "import secrets; print(secrets.token_hex(16))"`
+## Auth Flow
+- Users log in at `/login` with username + password → receive a JWT (valid 365 days)
+- JWT stored in `localStorage`, sent as `Authorization: Bearer <token>` on all API calls
+- `/log` accepts `?token=<jwt>` query param for iPhone shortcut compatibility
+- Server owner creates users via `POST /admin/create-user` with `X-API-Key` header
+- Response includes `shortcut_token` for the iPhone shortcut URL
 
 ## API Endpoints
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
-| `POST` | `/log` | API key | Insert a timestamped log row |
-| `GET` | `/analytics` | None | Full analytics JSON — heatmap, streaks, periods, trends, patterns, distribution |
-| `GET` | `/data` | None | Lightweight `{date: count}` for last 365 days (backwards compat) |
-| `POST` | `/admin/import` | API key | Import CSV — columns: `date`, `count`, optional `timestamp` |
-| `POST` | `/admin/seed` | API key | Seed ~400 days of fake data |
-| `DELETE` | `/admin/reset` | API key | Delete all log rows |
-| `GET` | `/` | None | Serve dashboard |
+| `POST` | `/auth/login` | None | Returns JWT |
+| `GET` | `/me` | JWT | Current user info + shortcut token |
+| `POST` | `/log` | JWT | Insert a timestamped log row |
+| `GET` | `/analytics` | JWT | Full analytics JSON |
+| `GET` | `/data` | JWT | Lightweight `{date: count}` for last 365 days |
+| `POST` | `/admin/import` | JWT | Import CSV — columns: `date`, `count`, optional `timestamp` |
+| `DELETE` | `/admin/reset` | JWT | Delete current user's logs |
+| `POST` | `/admin/create-user` | API key | Create a new user account |
+| `GET` | `/` | None | Dashboard (redirects to `/login` if no token) |
+| `GET` | `/login` | None | Login page |
 | `GET` | `/health` | None | Health check |
 
-Auth: `X-API-Key` header **or** `?api_key=` query param (query param used by iPhone shortcut).
-
 ## Admin Panel
-The ⚙ gear icon in the dashboard header opens an admin modal. Requires the API key.
-- **Import CSV** — adds historical data without wiping existing logs
-- **Seed** — populates with fake data (replaces existing)
-- **Clear** — deletes all logs, requires typing `CONFIRM`
+The ⚙ gear icon opens an admin modal (requires being signed in):
+- **iPhone Shortcut URL** — shows the user's personal shortcut URL with their token
+- **Import Historical Data** — CSV upload, appends to existing data
+- **Clear All Data** — deletes the current user's logs, requires typing `CONFIRM`
 
 Do NOT use the Railway shell to run database commands — this can crash the deployment.
+
+## Database Schema
+```sql
+CREATE TABLE users (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    username   TEXT    NOT NULL UNIQUE,
+    password   TEXT    NOT NULL,  -- bcrypt hash
+    habit_name TEXT    NOT NULL DEFAULT 'Habit',
+    tz         TEXT    NOT NULL DEFAULT 'UTC'
+);
+
+CREATE TABLE logs (
+    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    logged_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S', 'now')),
+    user_id   INTEGER REFERENCES users(id)
+);
+```
+Logs stored in UTC. Timezone conversion at read time in `get_analytics()` using `zoneinfo`.
+WAL mode enabled for concurrent reads.
+On Railway: DB at `/data/habit_tracker.db`. Locally: `habit_tracker.db`.
 
 ## Analytics JSON shape (`/analytics`)
 ```json
@@ -86,48 +118,37 @@ Do NOT use the Railway shell to run database commands — this can crash the dep
 }
 ```
 
-## Database schema
-```sql
-CREATE TABLE logs (
-    id        INTEGER PRIMARY KEY AUTOINCREMENT,
-    logged_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S', 'now'))
-);
-```
-Logs are stored in UTC. All timezone conversion happens at read time in `get_analytics()` using `zoneinfo`.
-On Railway, the DB file lives at `/data/habit_tracker.db` (persistent volume). Locally it falls back to `habit_tracker.db`.
-
-## CSV Import format
+## CSV Import Format
 ```
 date,count,timestamp
 2026-01-01,5,
 2026-01-02,1,2026-01-02 08:30:00
 ```
 - `date`: YYYY-MM-DD (required)
-- `count`: integer number of logs for that day (required)
-- `timestamp`: YYYY-MM-DD HH:MM:SS in local time (optional — if omitted, logs are spread evenly 9am–9pm)
-- Import appends to existing data; clear first if you want a clean slate
+- `count`: integer logs for that day (required)
+- `timestamp`: YYYY-MM-DD HH:MM:SS in local time (optional — spread evenly 9am–9pm if omitted)
 
 ## iPhone Shortcut Setup
-1. Open the **Shortcuts** app on iPhone
-2. Tap **+** → Add Action → **Get Contents of URL**
-3. Set Method: `POST`
-4. Set URL: `https://your-app.up.railway.app/log?api_key=YOUR_KEY`
-5. Set Request Body to `JSON` (leave body empty)
-6. Add the shortcut to your Home Screen
+1. Open **Shortcuts** app → tap **+** → Add Action → **Get Contents of URL**
+2. Set URL: `https://your-app.up.railway.app/log?token=YOUR_SHORTCUT_TOKEN`
+3. Set Method: `POST`, Request Body: `JSON` (empty body)
+4. Add to Home Screen
+
+Get your `shortcut_token` from the ⚙ admin panel or from the `POST /admin/create-user` response.
 
 ## Deployment (Railway)
-1. Push repo to GitHub (`gh repo create habit-tracker --public --source=. --remote=origin --push`)
-2. Go to railway.app → New Project → Deploy from GitHub repo → select `habit-tracker`
-3. Grant Railway access to the repo via Configure GitHub App if needed
-4. Set env vars in Railway dashboard: `HABIT_TRACKER_API_KEY`, `HABIT_NAME`, `TZ`
-5. Go to Settings → Networking → Generate Domain → enter port `8080`
-6. Paste the Railway URL into the iPhone shortcut
+1. Push repo to GitHub: `gh repo create habit-tracker --public --source=. --remote=origin --push`
+2. railway.app → New Project → Deploy from GitHub repo → select `habit-tracker`
+3. Grant Railway access via Configure GitHub App if needed
+4. Set env vars: `HABIT_TRACKER_API_KEY`, `HABIT_NAME`, `TZ`, optionally `JWT_SECRET`
+5. Settings → Networking → Generate Domain → port `8080`
+6. Create your user account via `POST /admin/create-user` with your API key
+7. Sign in at the Railway URL, copy your shortcut token from the admin panel
 
-Railway uses the `Dockerfile` to build and the `railway.toml` to configure the persistent volume at `/data`.
-Every push to `main` triggers an automatic redeploy.
+Every push to `main` triggers automatic redeploy.
 
 ## Secrets (never commit)
 | File | Contains |
 |---|---|
-| `.env` | `HABIT_TRACKER_API_KEY`, `HABIT_NAME`, `TZ` |
+| `.env` | `HABIT_TRACKER_API_KEY`, `JWT_SECRET`, `HABIT_NAME`, `TZ` |
 | `habit_tracker.db` | SQLite database (auto-created, in `.gitignore`) |
