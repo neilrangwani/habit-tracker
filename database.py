@@ -25,6 +25,12 @@ def init_db():
         conn.commit()
 
 
+def clear_logs():
+    with _conn() as conn:
+        conn.execute("DELETE FROM logs")
+        conn.commit()
+
+
 def log_habit():
     with _conn() as conn:
         conn.execute("INSERT INTO logs DEFAULT VALUES")

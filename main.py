@@ -49,6 +49,24 @@ def analytics():
     return JSONResponse(database.get_analytics(TZ))
 
 
+@app.post("/admin/seed")
+async def admin_seed(request: Request):
+    key = request.headers.get("X-API-Key") or request.query_params.get("api_key")
+    if not API_KEY or key != API_KEY:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    database.seed_fake_data(TZ)
+    return {"status": "seeded"}
+
+
+@app.delete("/admin/reset")
+async def admin_reset(request: Request):
+    key = request.headers.get("X-API-Key") or request.query_params.get("api_key")
+    if not API_KEY or key != API_KEY:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    database.clear_logs()
+    return {"status": "cleared"}
+
+
 # Backwards-compatible endpoint from CLAUDE.md
 @app.get("/data")
 def data():

@@ -153,6 +153,64 @@
       width: 11px; height: 11px; border-radius: 2px; display: inline-block;
     }
 
+    /* ── Admin gear button ── */
+    .admin-btn {
+      border: none; background: transparent; cursor: pointer;
+      color: var(--muted); font-size: 18px; padding: 6px; border-radius: 8px;
+      transition: color .15s, background .15s;
+      margin-left: 8px;
+    }
+    .admin-btn:hover { color: var(--text); background: var(--bg); }
+
+    /* ── Modal ── */
+    .modal-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,.4); z-index: 100;
+      align-items: center; justify-content: center;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: var(--card); border-radius: var(--radius);
+      padding: 28px; width: 100%; max-width: 420px; margin: 16px;
+      box-shadow: 0 8px 40px rgba(0,0,0,.18);
+    }
+    .modal-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 6px;
+    }
+    .modal-title { font-size: 16px; font-weight: 700; }
+    .modal-close {
+      border: none; background: transparent; cursor: pointer;
+      font-size: 18px; color: var(--muted); padding: 2px 6px; border-radius: 6px;
+    }
+    .modal-close:hover { background: var(--bg); }
+    .modal-desc { font-size: 13px; color: var(--muted); margin-bottom: 16px; }
+    .modal-input {
+      width: 100%; padding: 10px 12px; border: 1px solid var(--border);
+      border-radius: 10px; font-size: 14px; margin-bottom: 20px;
+      outline: none; transition: border-color .15s;
+    }
+    .modal-input:focus { border-color: var(--green); }
+    .admin-action {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 12px; padding: 14px 0; border-top: 1px solid var(--border);
+    }
+    .admin-action-title { font-size: 14px; font-weight: 600; margin-bottom: 2px; }
+    .admin-action-desc  { font-size: 12px; color: var(--muted); }
+    .btn {
+      border: none; cursor: pointer; padding: 8px 16px; border-radius: 8px;
+      font-size: 13px; font-weight: 600; white-space: nowrap; transition: opacity .15s;
+    }
+    .btn:hover { opacity: .85; }
+    .btn-secondary { background: var(--green-lt); color: var(--green-dk); }
+    .btn-danger    { background: #fee2e2; color: #dc2626; }
+    .admin-msg {
+      font-size: 13px; margin-top: 14px; min-height: 20px; text-align: center;
+    }
+    .admin-msg.error   { color: #dc2626; }
+    .admin-msg.success { color: var(--green-dk); }
+    .admin-msg.info    { color: var(--muted); }
+
     /* ── Loading / empty ── */
     #loading {
       display: flex; align-items: center; justify-content: center;
@@ -196,13 +254,43 @@
       <div class="header-sub">Daily habit tracker</div>
     </div>
   </div>
-  <div class="period-tabs">
-    <button onclick="setPeriod(this,'week')">Week</button>
-    <button onclick="setPeriod(this,'month')" class="active">Month</button>
-    <button onclick="setPeriod(this,'year')">Year</button>
-    <button onclick="setPeriod(this,'all')">All Time</button>
+  <div style="display:flex;align-items:center;gap:8px;">
+    <div class="period-tabs">
+      <button onclick="setPeriod(this,'week')">Week</button>
+      <button onclick="setPeriod(this,'month')" class="active">Month</button>
+      <button onclick="setPeriod(this,'year')">Year</button>
+      <button onclick="setPeriod(this,'all')">All Time</button>
+    </div>
+    <button class="admin-btn" onclick="openAdmin()" title="Admin">⚙</button>
   </div>
 </header>
+
+<!-- ── Admin Modal ── -->
+<div class="modal-overlay" id="adminOverlay" onclick="closeAdmin()">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <div class="modal-title">Admin</div>
+      <button class="modal-close" onclick="closeAdmin()">✕</button>
+    </div>
+    <p class="modal-desc">Enter your API key to perform admin actions.</p>
+    <input type="password" id="adminKey" class="modal-input" placeholder="API key" />
+    <div class="admin-action">
+      <div>
+        <div class="admin-action-title">Seed Historical Data</div>
+        <div class="admin-action-desc">Populate with ~1 year of realistic fake data</div>
+      </div>
+      <button class="btn btn-secondary" onclick="adminSeed()">Seed</button>
+    </div>
+    <div class="admin-action">
+      <div>
+        <div class="admin-action-title">Clear All Data</div>
+        <div class="admin-action-desc">Permanently delete every log entry</div>
+      </div>
+      <button class="btn btn-danger" onclick="adminReset()">Clear</button>
+    </div>
+    <div class="admin-msg" id="adminMsg"></div>
+  </div>
+</div>
 
 <!-- ── Loading ── -->
 <div id="loading">Loading…</div>
@@ -330,6 +418,48 @@ const BASE_SCALES = {
   x: { grid: { display: false }, ticks: { color: C.text, font: { size: 11 } } },
   y: { grid: { color: C.grid }, ticks: { color: C.text, font: { size: 11 } }, beginAtZero: true },
 };
+
+// ── Admin ──────────────────────────────────────────────────
+function openAdmin() {
+  document.getElementById('adminOverlay').classList.add('open');
+  document.getElementById('adminMsg').textContent = '';
+  document.getElementById('adminKey').value = '';
+}
+function closeAdmin() {
+  document.getElementById('adminOverlay').classList.remove('open');
+}
+function showAdminMsg(msg, type) {
+  const el = document.getElementById('adminMsg');
+  el.textContent = msg;
+  el.className = 'admin-msg ' + type;
+}
+async function adminSeed() {
+  const key = document.getElementById('adminKey').value.trim();
+  if (!key) { showAdminMsg('Enter your API key first.', 'error'); return; }
+  if (!confirm('Replace all existing data with ~1 year of fake data?')) return;
+  showAdminMsg('Seeding… this may take a moment.', 'info');
+  try {
+    const res = await fetch('/admin/seed?api_key=' + encodeURIComponent(key), { method: 'POST' });
+    if (res.status === 401) { showAdminMsg('Wrong API key.', 'error'); return; }
+    if (!res.ok) throw new Error();
+    showAdminMsg('Done! Reloading…', 'success');
+    setTimeout(() => { closeAdmin(); location.reload(); }, 1200);
+  } catch { showAdminMsg('Something went wrong.', 'error'); }
+}
+async function adminReset() {
+  const key = document.getElementById('adminKey').value.trim();
+  if (!key) { showAdminMsg('Enter your API key first.', 'error'); return; }
+  const confirmed = prompt('Type CONFIRM to permanently delete all data:');
+  if (confirmed !== 'CONFIRM') { showAdminMsg('Cancelled.', 'info'); return; }
+  showAdminMsg('Clearing…', 'info');
+  try {
+    const res = await fetch('/admin/reset?api_key=' + encodeURIComponent(key), { method: 'DELETE' });
+    if (res.status === 401) { showAdminMsg('Wrong API key.', 'error'); return; }
+    if (!res.ok) throw new Error();
+    showAdminMsg('Done! Reloading…', 'success');
+    setTimeout(() => { closeAdmin(); location.reload(); }, 1200);
+  } catch { showAdminMsg('Something went wrong.', 'error'); }
+}
 
 // ── Bootstrap ─────────────────────────────────────────────
 async function init() {
