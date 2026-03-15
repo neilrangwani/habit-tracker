@@ -161,7 +161,6 @@
     #dashboard { display: none; }
 
     @media (max-width: 768px) {
-      /* Header stacks vertically */
       .header {
         padding: 14px 16px;
         flex-direction: column;
@@ -171,23 +170,18 @@
       .period-tabs { width: 100%; justify-content: stretch; }
       .period-tabs button { flex: 1; padding: 8px 4px; font-size: 12px; }
 
-      /* Page */
       .page { padding: 16px 12px; }
 
-      /* KPI: 2 columns */
-      .grid-5 { grid-template-columns: repeat(2, 1fr); gap: 10px; }
-      /* Last KPI card spans full width so it doesn't sit alone */
-      .grid-5 > :last-child { grid-column: span 2; }
+      /* All grids: 2 columns, same gap */
+      .grid-5 { grid-template-columns: repeat(2, 1fr); gap: 12px; }
+      .grid-2  { grid-template-columns: repeat(2, 1fr); gap: 12px; }
 
-      /* Charts: single column */
-      .grid-2 { grid-template-columns: 1fr; gap: 12px; }
-
-      /* Cards: tighter padding */
       .card { padding: 16px; }
-      .card-value { font-size: 24px; }
+      .card-value { font-size: 22px; }
+      .chart-title { font-size: 13px; }
+      .chart-sub { font-size: 11px; margin-bottom: 12px; }
 
-      /* Shorter charts on mobile */
-      canvas { max-height: 200px; }
+      canvas { max-height: 160px; }
     }
   </style>
 </head>
