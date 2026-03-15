@@ -1,6 +1,6 @@
 # Habit Tracker
 
-A self-hosted habit tracking app with one-tap iPhone logging, JWT-authenticated user accounts, and a full analytics dashboard. Built to be simple, private, and genuinely useful for building consistent daily routines.
+A self-hosted habit tracking platform with multi-user accounts, one-tap iPhone logging, and a full analytics dashboard. Deploy it once, create accounts for yourself and your friends, and everyone tracks their own habit privately on a shared server.
 
 ![Dashboard preview](https://raw.githubusercontent.com/neilrangwani/habit-tracker/main/static/preview.png)
 
@@ -8,9 +8,11 @@ A self-hosted habit tracking app with one-tap iPhone logging, JWT-authenticated 
 
 ## What it does
 
-Log any habit — water intake, meditation, exercise, supplements — with a single tap on your iPhone home screen. The dashboard shows a full year of activity and breaks down your patterns so you can actually understand your behavior, not just count streaks.
+**For users:** log any habit — water intake, meditation, exercise, supplements — with a single tap on your iPhone home screen. Sign in to a personal dashboard that shows a full year of activity and breaks down your patterns so you can actually understand your behavior, not just count streaks.
 
-**Analytics included:**
+**For the server owner:** deploy once to Railway, create accounts for anyone you want via a simple API call, and each person gets their own login, isolated data, and a personal iPhone shortcut URL. No self-registration, no user management UI — just one curl command per person.
+
+**Analytics per user:**
 - GitHub-style activity heatmap (365 days)
 - Daily trend with rolling average, filterable by week / month / year / all time
 - Period-over-period change (e.g. this month vs last month)
@@ -19,8 +21,6 @@ Log any habit — water intake, meditation, exercise, supplements — with a sin
 - Weekly and monthly totals
 - Daily distribution — how often you hit 0, 1, 2, 3+ logs in a day
 - Current streak, longest streak, best day
-
-**Multi-user:** each person has their own account, password, and isolated data. You (the server owner) create accounts via API — no self-registration required.
 
 ---
 
@@ -39,7 +39,7 @@ No ORM, no frontend framework, no managed database. Everything runs in a single 
 
 ---
 
-## Quick start (local)
+## Local development
 
 **Requirements:** Python 3.10+, pip
 
@@ -50,36 +50,32 @@ cd habit-tracker
 pip install -r requirements.txt
 cp .env.example .env        # fill in your values
 
-python main.py --dry-run    # creates a demo user and seeds a year of fake data
+python main.py --dry-run    # creates a demo/demo account and seeds a year of fake data
 ```
 
 Open [http://localhost:8000](http://localhost:8000) and sign in with `demo` / `demo`.
-
-To run with real data:
-
-```bash
-python main.py
-```
 
 ---
 
 ## Configuration
 
-Copy `.env.example` to `.env` and fill in these values:
+These are server-level settings, set once at deploy time. Per-user settings (habit name, timezone) are specified when creating each account.
+
+Copy `.env.example` to `.env`:
 
 | Variable | Description | Example |
 |---|---|---|
-| `HABIT_TRACKER_API_KEY` | Master key for creating user accounts and admin operations | `a3f9d2...` |
-| `HABIT_NAME` | Default habit name for new users | `Water` |
-| `TZ` | Default timezone for new users | `America/New_York` |
+| `HABIT_TRACKER_API_KEY` | Master key — only you have this. Used to create user accounts. | `a3f9d2...` |
+| `HABIT_NAME` | Default habit name assigned to new users | `Water` |
+| `TZ` | Default timezone assigned to new users | `America/New_York` |
 | `JWT_SECRET` | Secret used to sign JWT tokens (defaults to `HABIT_TRACKER_API_KEY` if unset) | `s3cr3t...` |
 
-Generate a secure API key:
+Generate secure secrets:
 ```bash
 python -c "import secrets; print(secrets.token_hex(16))"
 ```
 
-A full list of valid timezone strings: [TZ database names on Wikipedia](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones) — use the **TZ identifier** column.
+Valid timezone strings: [TZ database names on Wikipedia](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones) — use the **TZ identifier** column.
 
 ---
 
@@ -124,18 +120,27 @@ Click **Deploy** after adding variables.
 2. Enter port `8080`
 3. Railway assigns a URL like `https://habit-tracker-production-xxxx.up.railway.app`
 
-### Step 6 — Create your user account
+### Step 6 — Create user accounts
+
+Create your own account:
 
 ```bash
 curl -X POST https://YOUR-APP.up.railway.app/admin/create-user \
   -H "X-API-Key: YOUR_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"username":"your_name","password":"yourpassword","habit_name":"Water","tz":"America/New_York"}'
+  -d '{"username":"neil","password":"yourpassword","habit_name":"Water","tz":"America/New_York"}'
 ```
 
-The response includes a `shortcut_token` — save it for the iPhone shortcut setup below.
+To add a friend, run the same command with their details:
 
-To add more users, repeat with different credentials. Each user gets their own isolated data and shortcut token.
+```bash
+curl -X POST https://YOUR-APP.up.railway.app/admin/create-user \
+  -H "X-API-Key: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"username":"alice","password":"alicepassword","habit_name":"Meditation","tz":"America/Los_Angeles"}'
+```
+
+Each response includes a `shortcut_token` unique to that user. Share their login URL (`https://YOUR-APP.up.railway.app/login`) and credentials with them — they log in, see only their own data, and can set up their own iPhone shortcut from the ⚙ admin panel.
 
 ### Step 7 — Verify
 
@@ -221,7 +226,7 @@ API key auth: `X-API-Key` header or `?api_key=` query param (owner operations on
 
 ## Privacy
 
-Self-hosted. Your habit data never leaves your own server. No third-party analytics, no tracking, no external services.
+Self-hosted. All habit data lives on your own server — no third-party analytics, no tracking, no external services. Each user's data is fully isolated; no user can see another's logs.
 
 ---
 
