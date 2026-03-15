@@ -283,6 +283,16 @@
     </div>
     <div class="admin-action">
       <div>
+        <div class="admin-action-title">Import CSV</div>
+        <div class="admin-action-desc">Columns: <code>date</code>, <code>count</code>, optional <code>timestamp</code></div>
+      </div>
+      <label class="btn btn-secondary" style="cursor:pointer;">
+        Upload
+        <input type="file" id="csvFile" accept=".csv" style="display:none" onchange="adminImport()">
+      </label>
+    </div>
+    <div class="admin-action">
+      <div>
         <div class="admin-action-title">Clear All Data</div>
         <div class="admin-action-desc">Permanently delete every log entry</div>
       </div>
@@ -446,6 +456,25 @@ async function adminSeed() {
     setTimeout(() => { closeAdmin(); location.reload(); }, 1200);
   } catch { showAdminMsg('Something went wrong.', 'error'); }
 }
+async function adminImport() {
+  const key = document.getElementById('adminKey').value.trim();
+  if (!key) { showAdminMsg('Enter your API key first.', 'error'); return; }
+  const file = document.getElementById('csvFile').files[0];
+  if (!file) return;
+  showAdminMsg('Importing…', 'info');
+  const form = new FormData();
+  form.append('file', file);
+  try {
+    const res = await fetch('/admin/import?api_key=' + encodeURIComponent(key), { method: 'POST', body: form });
+    if (res.status === 401) { showAdminMsg('Wrong API key.', 'error'); return; }
+    if (res.status === 400) { const d = await res.json(); showAdminMsg(d.detail, 'error'); return; }
+    if (!res.ok) throw new Error();
+    const d = await res.json();
+    showAdminMsg(`Imported ${d.inserted} entries. Reloading…`, 'success');
+    setTimeout(() => { closeAdmin(); location.reload(); }, 1200);
+  } catch { showAdminMsg('Something went wrong.', 'error'); }
+}
+
 async function adminReset() {
   const key = document.getElementById('adminKey').value.trim();
   if (!key) { showAdminMsg('Enter your API key first.', 'error'); return; }

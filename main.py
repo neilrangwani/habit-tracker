@@ -1,8 +1,10 @@
+import csv
+import io
 import os
 import sys
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -56,6 +58,21 @@ async def admin_seed(request: Request):
         raise HTTPException(status_code=401, detail="Unauthorized")
     database.seed_fake_data(TZ)
     return {"status": "seeded"}
+
+
+@app.post("/admin/import")
+async def admin_import(request: Request, file: UploadFile = File(...)):
+    key = request.headers.get("X-API-Key") or request.query_params.get("api_key")
+    if not API_KEY or key != API_KEY:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    content = (await file.read()).decode("utf-8-sig")  # strip BOM if present
+    reader = csv.DictReader(io.StringIO(content))
+    # Normalise header names to lowercase
+    rows = [{k.lower(): v for k, v in row.items()} for row in reader]
+    if not rows or "date" not in rows[0] or "count" not in rows[0]:
+        raise HTTPException(status_code=400, detail="CSV must have 'date' and 'count' columns")
+    inserted = database.import_csv(rows, TZ)
+    return {"status": "imported", "inserted": inserted}
 
 
 @app.delete("/admin/reset")

@@ -26,6 +26,59 @@ def init_db():
         conn.commit()
 
 
+def import_csv(rows: list[dict], tz_name: str = "UTC"):
+    """
+    Each row must have 'date' (YYYY-MM-DD) and 'count' (int).
+    Optional 'timestamp' (ISO or 'YYYY-MM-DD HH:MM:SS') — if present, used directly.
+    If no timestamp, count events are spread evenly across the day (9am–9pm).
+    Returns number of log entries inserted.
+    """
+    tz = ZoneInfo(tz_name)
+    records = []
+
+    for row in rows:
+        date_str = row["date"].strip()
+        count = int(row["count"])
+        ts = row.get("timestamp", "").strip()
+
+        if ts:
+            # Parse the provided timestamp and convert to UTC
+            for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M:%SZ"):
+                try:
+                    dt_local = datetime.strptime(ts, fmt).replace(tzinfo=tz)
+                    break
+                except ValueError:
+                    continue
+            else:
+                # Fallback: treat as noon on that date
+                dt_local = datetime.strptime(date_str, "%Y-%m-%d").replace(
+                    hour=12, tzinfo=tz
+                )
+            dt_utc = dt_local.astimezone(timezone.utc)
+            records.append((dt_utc.strftime("%Y-%m-%d %H:%M:%S"),))
+        else:
+            # Spread `count` events evenly between 9am and 9pm
+            if count <= 0:
+                continue
+            start_hour = 9 * 60   # minutes from midnight
+            end_hour   = 21 * 60
+            interval = (end_hour - start_hour) / count
+            for i in range(count):
+                minutes = int(start_hour + i * interval)
+                h, m = divmod(minutes, 60)
+                dt_local = datetime.strptime(date_str, "%Y-%m-%d").replace(
+                    hour=h, minute=m, tzinfo=tz
+                )
+                dt_utc = dt_local.astimezone(timezone.utc)
+                records.append((dt_utc.strftime("%Y-%m-%d %H:%M:%S"),))
+
+    with _conn() as conn:
+        conn.executemany("INSERT INTO logs (logged_at) VALUES (?)", records)
+        conn.commit()
+
+    return len(records)
+
+
 def clear_logs():
     with _conn() as conn:
         conn.execute("DELETE FROM logs")
