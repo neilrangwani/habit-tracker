@@ -127,7 +127,7 @@ On Railway: DB at `/data/habit_tracker.db`. Locally: `habit_tracker.db`.
 }
 ```
 
-## CSV Import Format
+## CSV Import Formatting
 ```
 date,count,timestamp
 2026-01-01,5,
