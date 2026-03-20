@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Create Account — Habit Tracker</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
+      background: #f5f4f0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .card {
+      background: #fff;
+      border-radius: 20px;
+      padding: 40px 36px;
+      width: 100%;
+      max-width: 380px;
+      box-shadow: 0 1px 3px rgba(0,0,0,.06), 0 8px 32px rgba(0,0,0,.06);
+      text-align: center;
+    }
+    .icon {
+      width: 56px; height: 56px; border-radius: 16px;
+      background: #dcfce7;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 26px;
+      margin: 0 auto 20px;
+    }
+    h1 { font-size: 22px; font-weight: 800; letter-spacing: -.4px; color: #111827; margin-bottom: 6px; }
+    .sub { font-size: 14px; color: #6b7280; margin-bottom: 28px; }
+    .field-label {
+      display: block; text-align: left;
+      font-size: 12px; font-weight: 600; color: #374151;
+      margin-bottom: 5px; margin-top: 12px;
+    }
+    input {
+      width: 100%; padding: 12px 14px;
+      border: 1px solid #e5e7eb; border-radius: 10px;
+      font-size: 15px; color: #111827;
+      outline: none; transition: border-color .15s;
+      background: #fafaf9;
+    }
+    input:focus { border-color: #22c55e; background: #fff; }
+    button {
+      width: 100%; padding: 13px;
+      background: #22c55e; color: #fff;
+      border: none; border-radius: 10px;
+      font-size: 15px; font-weight: 700;
+      cursor: pointer; transition: opacity .15s;
+      margin-top: 20px;
+    }
+    button:hover { opacity: .9; }
+    button:disabled { opacity: .6; cursor: not-allowed; }
+    .error {
+      font-size: 13px; color: #dc2626;
+      margin-top: 12px; min-height: 18px;
+    }
+    .signin-link {
+      font-size: 13px; color: #6b7280; margin-top: 20px;
+    }
+    .signin-link a { color: #22c55e; font-weight: 600; text-decoration: none; }
+    .signin-link a:hover { text-decoration: underline; }
+    .invalid-invite {
+      font-size: 14px; color: #6b7280; padding: 16px 0;
+    }
+    .invalid-invite strong { color: #111827; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon">💧</div>
+    <h1>Create Account</h1>
+    <p class="sub" id="subtext">Choose a username and password.</p>
+
+    <div id="invalidMsg" class="invalid-invite" style="display:none">
+      <strong>This invite link is invalid or has already been used.</strong><br>
+      Ask the server owner for a new one.
+    </div>
+
+    <form id="form" onsubmit="register(event)" style="display:none">
+      <label class="field-label" for="username">Username</label>
+      <input type="text" id="username" placeholder="e.g. alice" autocomplete="username" required />
+
+      <label class="field-label" for="password">Password</label>
+      <input type="password" id="password" placeholder="At least 8 characters" autocomplete="new-password" required />
+
+      <label class="field-label" for="confirm">Confirm password</label>
+      <input type="password" id="confirm" placeholder="Repeat password" autocomplete="new-password" required />
+
+      <label class="field-label" for="habitName">What habit are you tracking?</label>
+      <input type="text" id="habitName" placeholder="Water, Exercise, Meditation…" />
+
+      <button type="submit" id="btn">Create account</button>
+    </form>
+
+    <div class="error" id="error"></div>
+    <div class="signin-link">Already have an account? <a href="/login">Sign in</a></div>
+  </div>
+
+  <script>
+    if (localStorage.getItem('token')) window.location.href = '/';
+
+    const params = new URLSearchParams(window.location.search);
+    const invite = params.get('invite') || '';
+
+    if (!invite) {
+      document.getElementById('invalidMsg').style.display = 'block';
+      document.getElementById('subtext').style.display = 'none';
+    } else {
+      document.getElementById('form').style.display = 'block';
+    }
+
+    async function register(e) {
+      e.preventDefault();
+      const password = document.getElementById('password').value;
+      const confirm  = document.getElementById('confirm').value;
+      if (password !== confirm) {
+        document.getElementById('error').textContent = 'Passwords do not match.';
+        return;
+      }
+      const btn = document.getElementById('btn');
+      btn.disabled = true;
+      btn.textContent = 'Creating account…';
+      document.getElementById('error').textContent = '';
+      try {
+        const res = await fetch('/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            invite,
+            username:   document.getElementById('username').value.trim(),
+            password,
+            habit_name: document.getElementById('habitName').value.trim(),
+          }),
+        });
+        const data = await res.json();
+        if (res.ok) {
+          localStorage.setItem('token', data.token);
+          window.location.href = '/';
+        } else {
+          document.getElementById('error').textContent = data.detail || 'Something went wrong.';
+          btn.disabled = false;
+          btn.textContent = 'Create account';
+        }
+      } catch {
+        document.getElementById('error').textContent = 'Connection error. Try again.';
+        btn.disabled = false;
+        btn.textContent = 'Create account';
+      }
+    }
+  </script>
+</body>
+</html>

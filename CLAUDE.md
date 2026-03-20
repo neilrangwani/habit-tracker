@@ -64,13 +64,16 @@ python main.py --dry-run  # creates demo/demo user and seeds ~400 days of fake d
 | `POST` | `/admin/import` | JWT | Import CSV — columns: `date`, `count`, optional `timestamp` |
 | `DELETE` | `/admin/reset` | JWT | Delete current user's logs |
 | `POST` | `/admin/create-user` | API key | Create a new user account |
+| `POST` | `/admin/create-invite` | API key | Generate a one-time invite link |
+| `POST` | `/auth/register` | Invite token | Self-register with a valid invite token |
 | `GET` | `/` | None | Dashboard (redirects to `/login` if no token) |
 | `GET` | `/login` | None | Login page |
+| `GET` | `/register` | None | Registration page (requires `?invite=<token>`) |
 | `GET` | `/health` | None | Health check |
 
 ## Admin Panel
 The ⚙ gear icon opens an admin modal (requires being signed in):
-- **iPhone Shortcut URL** — shows the user's personal shortcut URL with their token
+- **iPhone Shortcut URL** — shows the user's personal shortcut URL with their token; expandable step-by-step setup guide
 - **Import Historical Data** — CSV upload, appends to existing data
 - **Clear All Data** — deletes the current user's logs, requires typing `CONFIRM`
 
@@ -84,6 +87,12 @@ CREATE TABLE users (
     password   TEXT    NOT NULL,  -- bcrypt hash
     habit_name TEXT    NOT NULL DEFAULT 'Habit',
     tz         TEXT    NOT NULL DEFAULT 'UTC'
+);
+
+CREATE TABLE invites (
+    token      TEXT PRIMARY KEY,
+    used       INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S', 'now'))
 );
 
 CREATE TABLE logs (

@@ -35,6 +35,13 @@ def init_db():
                 user_id   INTEGER REFERENCES users(id)
             )
         """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS invites (
+                token      TEXT PRIMARY KEY,
+                used       INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S', 'now'))
+            )
+        """)
         # Migration: add user_id to existing logs table if missing
         try:
             conn.execute("ALTER TABLE logs ADD COLUMN user_id INTEGER REFERENCES users(id)")
@@ -51,6 +58,23 @@ def create_user(username: str, password_hash: str, habit_name: str = "Habit", tz
         )
         conn.commit()
         return cur.lastrowid
+
+
+def create_invite(token: str):
+    with _conn() as conn:
+        conn.execute("INSERT INTO invites (token) VALUES (?)", (token,))
+        conn.commit()
+
+
+def claim_invite(token: str) -> bool:
+    """Mark the invite as used. Returns True if it was valid and unused."""
+    with _conn() as conn:
+        row = conn.execute("SELECT used FROM invites WHERE token = ?", (token,)).fetchone()
+        if not row or row["used"]:
+            return False
+        conn.execute("UPDATE invites SET used = 1 WHERE token = ?", (token,))
+        conn.commit()
+        return True
 
 
 def get_user_by_username(username: str) -> Optional[dict]:

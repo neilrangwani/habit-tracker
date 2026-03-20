@@ -213,6 +213,34 @@
     .admin-msg.success { color: var(--green-dk); }
     .admin-msg.info    { color: var(--muted); }
 
+    /* ── Shortcut instructions ── */
+    .shortcut-toggle {
+      font-size: 12px; font-weight: 600; color: var(--green-dk);
+      background: none; border: none; cursor: pointer; padding: 0;
+      margin-top: 10px; text-align: left; width: auto;
+      display: inline-flex; align-items: center; gap: 4px;
+      transition: opacity .15s;
+    }
+    .shortcut-toggle:hover { opacity: .75; }
+    .shortcut-steps {
+      display: none; margin-top: 12px;
+      background: var(--bg); border-radius: 10px;
+      padding: 14px 16px;
+      text-align: left;
+    }
+    .shortcut-steps.open { display: block; }
+    .shortcut-steps ol {
+      padding-left: 18px; margin: 0;
+      font-size: 13px; color: var(--text);
+      line-height: 1.7;
+    }
+    .shortcut-steps li { margin-bottom: 4px; }
+    .shortcut-steps li:last-child { margin-bottom: 0; }
+    .shortcut-steps code {
+      background: #e5e7eb; border-radius: 4px;
+      padding: 1px 5px; font-size: 12px;
+    }
+
     /* ── Loading / empty ── */
     #loading {
       display: flex; align-items: center; justify-content: center;
@@ -278,10 +306,25 @@
     <div class="admin-action" style="border-top:none;padding-top:0">
       <div style="width:100%">
         <div class="admin-action-title">iPhone Shortcut URL</div>
-        <div class="admin-action-desc" style="margin-bottom:8px">Paste this into your shortcut's URL field</div>
+        <div class="admin-action-desc" style="margin-bottom:8px">One tap on your Home Screen logs your habit instantly</div>
         <div style="display:flex;gap:8px;align-items:center">
           <input type="text" id="shortcutUrl" class="modal-input" style="margin:0;flex:1;font-size:12px" readonly />
           <button class="btn btn-secondary" onclick="copyShortcut()">Copy</button>
+        </div>
+        <button class="shortcut-toggle" id="shortcutToggle" onclick="toggleShortcutSteps()">
+          <span id="shortcutToggleArrow">▶</span> How to set up the shortcut
+        </button>
+        <div class="shortcut-steps" id="shortcutSteps">
+          <ol>
+            <li>On your iPhone, open the <strong>Shortcuts</strong> app.</li>
+            <li>Tap <strong>+</strong> in the top-right corner to create a new shortcut.</li>
+            <li>Tap <strong>Add Action</strong>, then search for and select <strong>Get Contents of URL</strong>.</li>
+            <li>Tap the URL field and paste your shortcut URL (copied above).</li>
+            <li>Tap <strong>Show More</strong> and set Method to <strong>POST</strong>. Leave the request body empty.</li>
+            <li>Tap the shortcut name at the top (e.g. "New Shortcut") and give it a name like <em>Log Water</em>.</li>
+            <li>Tap the <strong>share icon</strong> (↑) → <strong>Add to Home Screen</strong> → choose an icon and tap <strong>Add</strong>.</li>
+            <li>Done — one tap from your Home Screen now logs your habit with a full timestamp.</li>
+          </ol>
         </div>
       </div>
     </div>
@@ -466,6 +509,12 @@ function copyShortcut() {
   el.select();
   document.execCommand('copy');
   showAdminMsg('Copied to clipboard!', 'success');
+}
+function toggleShortcutSteps() {
+  const steps  = document.getElementById('shortcutSteps');
+  const arrow  = document.getElementById('shortcutToggleArrow');
+  const isOpen = steps.classList.toggle('open');
+  arrow.textContent = isOpen ? '▼' : '▶';
 }
 async function adminImport() {
   const file = document.getElementById('csvFile').files[0];

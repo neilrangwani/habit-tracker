@@ -1,6 +1,7 @@
 import csv
 import io
 import os
+import secrets
 import sys
 from datetime import datetime, timedelta
 from typing import Optional
@@ -83,12 +84,40 @@ def login_page():
     return FileResponse("static/login.html")
 
 
+@app.get("/register", include_in_schema=False)
+def register_page():
+    return FileResponse("static/register.html")
+
+
 @app.get("/health")
 def health():
     return {"status": "ok"}
 
 
 # ── Auth ──────────────────────────────────────────────────────
+@app.post("/auth/register")
+async def register(request: Request):
+    body       = await request.json()
+    invite     = body.get("invite", "").strip()
+    username   = body.get("username", "").strip()
+    password   = body.get("password", "")
+    habit_name = (body.get("habit_name") or "").strip() or os.getenv("HABIT_NAME", "Habit")
+    tz         = body.get("tz", TZ)
+    if not invite:
+        raise HTTPException(status_code=400, detail="Invite token required")
+    if not username or not password:
+        raise HTTPException(status_code=400, detail="Username and password required")
+    if len(password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+    if database.get_user_by_username(username):
+        raise HTTPException(status_code=409, detail="Username already taken")
+    if not database.claim_invite(invite):
+        raise HTTPException(status_code=400, detail="Invalid or already-used invite link")
+    uid   = database.create_user(username, pwd_context.hash(password), habit_name, tz)
+    token = create_access_token(uid, username)
+    return {"token": token, "username": username}
+
+
 @app.post("/auth/login")
 async def login(request: Request):
     body     = await request.json()
@@ -152,6 +181,15 @@ async def admin_reset(request: Request):
 
 
 # ── Admin: user management (owner only) ──────────────────────
+@app.post("/admin/create-invite")
+async def admin_create_invite(request: Request):
+    require_admin_key(request)
+    token    = secrets.token_urlsafe(32)
+    database.create_invite(token)
+    base_url = str(request.base_url).rstrip("/")
+    return {"invite_url": f"{base_url}/register?invite={token}"}
+
+
 @app.post("/admin/create-user")
 async def admin_create_user(request: Request):
     require_admin_key(request)
