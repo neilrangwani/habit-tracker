@@ -134,8 +134,9 @@ def clear_logs(user_id: int):
 
 
 _HOUR_WEIGHTS = [0, 0, 0, 0, 0, 1, 2, 5, 8, 4, 3, 3, 6, 4, 3, 3, 4, 5, 8, 7, 4, 2, 1, 0]
-# Daily count distribution: range 5-12, peak at 7, realistic skew
-_DAY_COUNT_WEIGHTS = [3, 5, 8, 7, 5, 3, 2, 1]  # for counts 5,6,7,8,9,10,11,12
+# Daily count distribution: range 4-15, peak at 10, realistic (not normal).
+# Gradual climb, plateau near peak, longer right tail for high-motivation days.
+_DAY_COUNT_WEIGHTS = [2, 5, 7, 10, 12, 14, 15, 13, 9, 6, 3, 2]  # counts 4,5,6,7,8,9,10,11,12,13,14,15
 
 
 def seed_fake_data(tz_name: str, user_id: int):
@@ -152,9 +153,7 @@ def seed_fake_data(tz_name: str, user_id: int):
     records = []
     for days_ago in range(400, -1, -1):
         day = (now - timedelta(days=days_ago)).replace(hour=0, minute=0, second=0, microsecond=0)
-        if days_ago > 14 and random.random() < 0.15:
-            continue
-        for _ in range(random.choices(range(5, 13), weights=_DAY_COUNT_WEIGHTS)[0]):
+        for _ in range(random.choices(range(4, 16), weights=_DAY_COUNT_WEIGHTS)[0]):
             hour = random.choices(range(24), weights=_HOUR_WEIGHTS)[0]
             dt = day.replace(hour=hour, minute=random.randint(0, 59), second=random.randint(0, 59))
             records.append((dt.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"), user_id))
@@ -182,7 +181,7 @@ def keep_demo_current(user_id: int, tz_name: str):
     if existing > 0:
         return
 
-    count = random.choices(range(5, 13), weights=_DAY_COUNT_WEIGHTS)[0]
+    count = random.choices(range(4, 16), weights=_DAY_COUNT_WEIGHTS)[0]
     records = []
     for _ in range(count):
         hour = random.choices(range(24), weights=_HOUR_WEIGHTS)[0]
@@ -293,10 +292,10 @@ def get_analytics(user_id: int, tz_name: str = "UTC") -> dict:
         dow_cnt[d.weekday()] += 1
     by_dow = [round(dow_sum[i] / dow_cnt[i], 1) if dow_cnt[i] else 0 for i in range(7)]
 
-    dist = [0] * 12
+    dist = [0] * 16
     d = first_day
     while d <= today:
-        dist[min(by_date.get(d, 0), 11)] += 1
+        dist[min(by_date.get(d, 0), 15)] += 1
         d += timedelta(days=1)
 
     return {
