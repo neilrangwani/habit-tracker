@@ -144,7 +144,7 @@ def seed_fake_data(tz_name: str, user_id: int):
         existing = conn.execute(
             "SELECT COUNT(*) FROM logs WHERE user_id = ?", (user_id,)
         ).fetchone()[0]
-    if existing >= 100:
+    if existing > 0:
         return  # already seeded — don't wipe history on redeploy
 
     tz = ZoneInfo(tz_name)
