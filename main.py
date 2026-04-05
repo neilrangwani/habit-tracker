@@ -1,3 +1,4 @@
+import asyncio
 import csv
 import io
 import os
@@ -29,19 +30,36 @@ app = FastAPI(title="Habit Tracker")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
+_demo_task = None  # hold reference so asyncio doesn't GC it
+
+
+async def _demo_refresh_loop(user_id: int, tz_name: str):
+    """Hourly background task: fill in today's demo logs if missing."""
+    while True:
+        await asyncio.sleep(3600)
+        try:
+            database.keep_demo_current(user_id, tz_name)
+        except Exception as e:
+            print(f"Demo refresh error: {e}")
+
+
 # ── Startup ───────────────────────────────────────────────────
 @app.on_event("startup")
-def startup():
+async def startup():
+    global _demo_task
     database.init_db()
     if "--dry-run" in sys.argv:
-        print("Dry-run: creating demo user and seeding data…")
-        ph = pwd_context.hash("demo")
-        try:
-            uid = database.create_user("demo", ph, os.getenv("HABIT_NAME", "Habit"), TZ)
-        except Exception:
-            user = database.get_user_by_username("demo")
-            uid = user["id"] if user else 1
-        database.seed_fake_data(TZ, uid)
+        user = database.get_user_by_username("demo")
+        if not user:
+            print("Dry-run: creating demo user and seeding data…")
+            ph  = pwd_context.hash("demo")
+            uid = database.create_user("demo", ph, os.getenv("HABIT_NAME", "Water"), TZ)
+            database.seed_fake_data(TZ, uid)
+        else:
+            uid = user["id"]
+            print("Dry-run: demo user already exists, skipping seed.")
+        database.keep_demo_current(uid, TZ)
+        _demo_task = asyncio.create_task(_demo_refresh_loop(uid, TZ))
 
 
 # ── Auth helpers ──────────────────────────────────────────────
@@ -71,6 +89,11 @@ def require_admin_key(request: Request):
     key = request.headers.get("X-API-Key") or request.query_params.get("api_key")
     if not API_KEY or key != API_KEY:
         raise HTTPException(status_code=401, detail="Unauthorized")
+
+
+def require_not_demo(user: dict):
+    if user["username"] == "demo":
+        raise HTTPException(status_code=403, detail="Demo account is read-only")
 
 
 # ── Static pages ──────────────────────────────────────────────
@@ -143,6 +166,7 @@ def me(request: Request):
 @app.post("/log")
 async def log(request: Request):
     user = get_current_user(request)
+    require_not_demo(user)
     database.log_habit(user["id"])
     return {"status": "logged"}
 
@@ -164,6 +188,7 @@ def data(request: Request):
 @app.post("/admin/import")
 async def admin_import(request: Request, file: UploadFile = File(...)):
     user    = get_current_user(request)
+    require_not_demo(user)
     content = (await file.read()).decode("utf-8-sig")
     reader  = csv.DictReader(io.StringIO(content))
     rows    = [{k.lower(): v for k, v in row.items()} for row in reader]
@@ -176,6 +201,7 @@ async def admin_import(request: Request, file: UploadFile = File(...)):
 @app.delete("/admin/reset")
 async def admin_reset(request: Request):
     user = get_current_user(request)
+    require_not_demo(user)
     database.clear_logs(user["id"])
     return {"status": "cleared"}
 
