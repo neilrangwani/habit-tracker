@@ -206,6 +206,19 @@ async def admin_reset(request: Request):
     return {"status": "cleared"}
 
 
+@app.post("/admin/reseed-demo")
+async def admin_reseed_demo(request: Request):
+    """Wipe and re-seed the demo account. Requires API key."""
+    require_admin_key(request)
+    user = database.get_user_by_username("demo")
+    if not user:
+        raise HTTPException(status_code=404, detail="Demo user does not exist")
+    database.clear_logs(user["id"])
+    database.seed_fake_data(TZ, user["id"])
+    database.keep_demo_current(user["id"], TZ)
+    return {"status": "reseeded", "user_id": user["id"]}
+
+
 # ── Admin: user management (owner only) ──────────────────────
 @app.post("/admin/create-invite")
 async def admin_create_invite(request: Request):
